@@ -1,0 +1,27 @@
+#+TITLE: decamp - a tiny utility to convert your campsite json export to markdown
+
+We built decamp in a single day using AI coding tools. Our process:
+1. Provide context and rough desired description to Gemini and let it create a
+   plan / tech spec.
+2. Create an initial implementation with https://bolt.new. Because we did the
+   pre-work of creating a detailed and informed tech spec, it actually
+   one-shotted the functionality.
+3. Tweaked the functionality and styling with Cursor + a couple manual edits.
+
+We've also written a [[https://socialtechnologylab.com/blog/decamp][blog post]] about this, if you're curious to learn more!
+
+* FAQ
+
+** What is Campsite?
+
+A communication tool for teams. It's super well designed and we used it with
+joy. However, it's shutting down in February 2025.
+
+** How do I export my data from Campsite?
+
+Check [[https://www.campsite.com/blog/campsite-winding-down][their announcement]] for instructions.
+
+** Does my data get sent to your servers?
+
+Nope! It's a purely client-side app. (Check =src/pages/index.astro= for the
+full code.)

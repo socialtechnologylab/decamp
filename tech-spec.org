@@ -1,0 +1,184 @@
+* Tech spec
+
+*Project: JSON to Markdown Converter Web App*
+
+*Overview:*
+
+A static web app that converts a ZIP archive containing JSON data (from a communications app export) into Markdown files. The app will handle unzipping, parsing, formatting, and downloading the output as a ZIP file.
+
+*Functionality:*
+
+1.  *File Input:*
+    *   Allow users to drag-and-drop or upload a ZIP file.
+2.  *ZIP Processing:*
+    *   Use a JavaScript library (e.g., =jszip=) to unzip the file client-side.
+3.  *JSON Parsing:*
+    *   Parse the following JSON files:
+        *   =/users.json=: Contains user data.
+        *   =/channels/:channel_id/channel.json=: Contains channel metadata and members.
+        *   =/channels/:channel_id/posts/:post_id/post.json=: Contains post data, comments, and replies.
+4.  *User Mapping:*
+    *   Create a mapping of user IDs to display names from =/users.json=.
+5.  *Markdown Generation:*
+    *   *=all.md= (Single File):*
+        *   Format channel names as top-level headers (=#=).
+        *   Format post titles as second-level headers (=##=), appending =[resolved]= if applicable.
+        *   Format post content as described below in the =single post= section.
+    *   *Single Post Files:*
+        *   For each post, create a file named =/channel_name/post_title (post_id).md=.
+        *   Format each post using the following Markdown structure:
+#+begin_src
+        ## <Post Title> [resolved]
+        Author: <User Display Name>
+        Created on: YYYY-MM-DD
+        Resolved on: YYYY-MM-DD: <Resolution Comment> (skip if not resolved)
+
+        <Post Description (replace <@user_id> with display names)>
+
+        ### Comments
+
+        #### [resolved] <User Display Name> (YYYY-MM-DD HH:MM):
+        <Comment Body (replace <@user_id> with display names)>
+
+        - [reply <User Display Name>] (YYYY-MM-DD HH:MM): <Reply Body (replace <@user_id> with display names)>
+        ...
+        #### ... second comment ...
+#+end_src
+6.  *User Tagging:*
+    *   Replace user tags =<@user_id>= with the corresponding display name from the user mapping in all post content, comments and replies.
+7.  *Date Formatting:*
+    *   Format dates from =created_at=, and =resolved_at= fields into =YYYY-MM-DD= and =YYYY-MM-DD HH:MM= as required in the output markdown files
+8.  *Output Zip Creation:*
+    *   Use =jszip= to create a ZIP archive containing:
+        *   =all.md= in the root.
+        *   A folder for each channel, and the markdown files inside.
+9.  *Download:*
+    *   Allow users to download the generated ZIP file.
+
+*Tech Stack:*
+
+-   *HTML/CSS:* For structure and basic styling.
+-   *JavaScript:* Core logic (file handling, JSON parsing, Markdown generation, ZIP creation, download).
+-   *Libraries:*
+    *   =jszip=: For ZIP file handling.
+    *   =FileSaver.js=:  To initiate file downloads.
+    *   No front-end framework needed. (vanilla js)
+
+*Data Structure:*
+
+-   Utilize JavaScript objects/arrays to store and manipulate parsed JSON data.
+
+*Implementation Details:*
+
+1.  *HTML Structure:*
+    *   A simple HTML page with a file input (or drag-and-drop area) and a download button.
+2.  *JavaScript Logic:*
+    *   Event listeners for file upload/drop.
+    *   Use =JSZip.loadAsync(file)= to load the uploaded ZIP data.
+    *   Iterate through the ZIP entries, identify file types, and use =JSZip.file(filename).async('text')= to load content.
+    *   Convert the loaded content to JSON using =JSON.parse()=.
+    *   Build the user mapping from =/users.json=
+    *   Generate markdown strings based on the logic described in Markdown Generation above.
+    *   Use a =JSZip= object to create a new zip. Use =zip.file(filename, text)= to add the generated markdown content.
+    *   Use =zip.generateAsync({ type: 'blob' })= to create a blob.
+    *   Use =saveAs(blob, "output.zip")= (FileSaver.js) to trigger the download.
+
+*Error Handling:*
+
+-   Display error messages for invalid file types, parsing issues, etc.
+
+*UI/UX:*
+
+-   Simple, clear interface:
+    *   Drag-and-drop area or upload button
+    *   Progress indicator (optional) during ZIP processing.
+    *   Download button.
+
+*Delivery:*
+-  A functional static website (html/css/js)
+-  No backend is required
+
+*INPUT DATA TYPES*
+
+-  =/users.json=:  Will be parsed into a =Users= (Array of =User= objects, see type definitions below)
+-   =/channels/:channel_id/channel.json=: Will be parsed into a =Channel= object (see type definitions below)
+-   =/channels/:channel_id/posts/:post_id/post.json=: Will be parsed into a =Post= object (see type definitions below)
+
+
+#+begin_src typescript
+// /users.json
+interface User {
+  id: string;
+  username: string;
+  display_name: string | null;
+  email: string;
+  created_at: string; // ISO Date String
+  role: 'admin' | 'member';
+  deactivated: boolean;
+}
+
+type Users = User[];
+
+
+// /channels/:id/channel.json
+interface Channel {
+    id: string;
+    accessory: null; // Can be further typed
+    name: string;
+    private: boolean;
+    archived: boolean;
+    created_at: string; // ISO Date String
+    description: string | null;
+    members: User[]; // reuse User interface
+}
+
+
+// /channels/:id/posts/:id/post.json
+interface PostAuthor extends User {}
+interface CommentAuthor extends User {}
+interface ReplyAuthor extends User {}
+
+
+interface Reply {
+  id: string;
+  body: string;
+  created_at: string; // ISO Date String
+  author: ReplyAuthor;
+  resolved_at: string | null;
+  resolved_by: null; // can be further typed
+}
+
+interface Comment {
+  id: string;
+  body: string;
+  created_at: string; // ISO Date String
+  author: CommentAuthor;
+    resolved_at: string | null;
+    resolved_by: CommentAuthor | null;
+  replies: Reply[];
+}
+
+interface Post {
+  id: string;
+  title: string;
+  description: string;
+  created_at: string; // ISO Date String
+  author: PostAuthor;
+  version: number;
+  resolved_at: string | null;
+  resolved_by: PostAuthor | null;
+    resolved_comment: string | null;
+    resolution: string
+  comments: Comment[];
+}
+#+end_src
+
+*Explanation:*
+
+-   *=User=*: Represents the structure of a user object in the =users.json= and also used within channel data and post author data
+-   *=Users=*: An array of =User= objects.
+-  *=Channel=*: Represents the structure of the channel data.
+-   *=PostAuthor=*, *=CommentAuthor=*, *=ReplyAuthor=*: These interfaces are aliases for =User=. They clarify that the user object in post, comments, and replies has the same interface as defined in the =users.json= file.
+-   *=Reply=*:  Represents the structure of a reply to a comment.
+-   *=Comment=*: Represents the structure of a comment.
+-   *=Post=*: Represents the structure of a post, including its comments.

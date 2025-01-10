@@ -1,0 +1,25 @@
+---
+interface Props {
+        title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+        <head>
+                <meta charset="UTF-8" />
+                <meta name="description" content="Convert your campsite export to markdown files" />
+                <meta name="viewport" content="width=device-width" />
+                <link rel="icon" type="image/png" href="/decamp.png" />
+                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+                <meta name="generator" content={Astro.generator} />
+                <title>{title}</title>
+
+                <script is:inline async src="https://um.lodder.dev/lodder.js" data-website-id="9984be09-682c-458d-9dcc-5c186dab14e4"></script>
+        </head>
+        <body class="min-h-screen bg-background font-sans">
+                <slot />
+        </body>
+</html>

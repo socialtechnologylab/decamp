@@ -1,0 +1,406 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { Button } from '../components/ui/button';
+import ExampleOutput from '../components/ExampleOutput';
+---
+
+<Layout title="decamp - convert your campsite export to markdown">
+  <main class="container mx-auto px-4 pt-8 sm:pt-16 pb-12 min-h-screen bg-background text-foreground">
+    <div class="max-w-2xl mx-auto">
+      <div class="flex items-center justify-center gap-3 mb-2">
+        <img src="/decamp.png" alt="decamp logo" class="w-12 h-12 mix-blend-darken" />
+        <h1 class="text-2xl font-medium">decamp</h1>
+
+      </div>
+      <p class="text-center sm:text-lg mb-8">it's time to <a href="https://www.campsite.com/blog/campsite-winding-down" target="_blank" class="underline underline-offset-1 underline-primary hover:no-underline">pack up your campsite</a>.<br />convert your campsite json export to markdown files with decamp.</p>
+
+      <div class="upload-container" id="dropZone">
+        <p class="sm:text-lg mb-4">drag and drop your campsite export .zip here or</p>
+        <input type="file" id="fileInput" accept=".zip" class="hidden" />
+        <div class="flex flex-col gap-4 items-center">
+          <Button id="browseBtn" variant="secondary" className="w-full max-w-xs">browse files</Button>
+        </div>
+      </div>
+
+      <div id="status" class="status"></div>
+
+      <Button id="convertBtn" disabled className="w-full">convert and download</Button>
+
+      <p class="group text-muted-foreground text-sm opacity-60 mt-6 sm:mt-12 text-center">
+        data stays on your device, because <br class="sm:hidden" /><a
+                                                                     href="https://socialtechnologylab.com/blog/decamp"
+                                                                     target="_blank"
+                                                                     class="underline hover:no-underline"
+                                                                   >conversion happens client-side</a>.
+      </p>
+
+      <p class="group text-muted-foreground text-sm opacity-60 text-center mt-4">
+        <ExampleOutput client:only /> <span class="mx-2 opacity-60">&bull;</span> <a href="https://github.com/socialtechnologylab/decamp"
+                                                                         target="_blank"
+                                                                         class="underline hover:no-underline">source</a>
+      </p>
+    </div>
+
+    <div class="mt-6" />
+
+    <a
+            href="https://socialtechnologylab.com/blog/decamp"
+            target="_blank"
+            class="group text-muted-foreground text-sm opacity-60 sm:absolute bottom-8 sm:bottom-24 left-1/2 transform -translate-x-1/2"
+          >
+            <div class="flex flex-col md:flex-row items-center">
+              <p>
+                a tiny utility by
+              </p>
+              <div class="flex items-center">
+                <img
+                  src="https://socialtechnologylab.nl/stl-logo.svg"
+                  class="h-5 w-5 saturate-30 md:ml-2 mr-1 opacity-100"
+                  alt="Social Technology Lab logo"
+                />
+                <p class="font-semibold group-hover:underline text-primary">
+                  Social Technology Lab
+                </p>
+              </div>
+            </div>
+    </a>
+  </main>
+</Layout>
+
+<style>
+  .upload-container {
+    @apply border-2 border-dashed border-muted rounded-2xl p-6 sm:p-8 text-center mb-8 bg-background transition-colors duration-200;
+  }
+  .upload-container.drag-over {
+    @apply border-primary bg-primary/5;
+  }
+  .status {
+    @apply px-6 py-4 rounded-2xl bg-muted/40 my-6 hidden text-sm;
+  }
+  .status.error {
+    @apply bg-red-100 border border-red-200 text-red-700;
+  }
+  .status.success {
+    @apply bg-green-100 border border-green-200 text-green-700;
+  }
+</style>
+
+<script>
+  import JSZip from 'jszip';
+  import { saveAs } from 'file-saver';
+
+  interface User {
+    id: string;
+    username: string;
+    display_name: string | null;
+    email: string;
+    created_at: string;
+    role: 'admin' | 'member';
+    deactivated: boolean;
+  }
+
+  interface Channel {
+    id: string;
+    accessory: null;
+    name: string;
+    private: boolean;
+    archived: boolean;
+    created_at: string;
+    description: string | null;
+    members: User[];
+  }
+
+  interface Reply {
+    id: string;
+    body: string;
+    created_at: string;
+    author: User;
+    resolved_at: string | null;
+    resolved_by: null;
+  }
+
+  interface Comment {
+    id: string;
+    body: string;
+    created_at: string;
+    author: User;
+    resolved_at: string | null;
+    resolved_by: User | null;
+    replies: Reply[];
+  }
+
+  interface Post {
+    id: string;
+    title: string;
+    description: string;
+    created_at: string;
+    author: User;
+    version: number;
+    resolved_at: string | null;
+    resolved_by: User | null;
+    resolved_comment: string | null;
+    resolution: string;
+    comments: Comment[];
+  }
+
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput') as HTMLInputElement;
+  const browseBtn = document.getElementById('browseBtn');
+  const convertBtn = document.getElementById('convertBtn') as HTMLButtonElement;
+  const statusDiv = document.getElementById('status');
+
+  let selectedFile: File | null = null;
+
+  // Format date functions
+  const formatDate = (dateStr: string) => {
+    return new Date(dateStr).toISOString().split('T')[0];
+  };
+
+  const formatDateTime = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return `${formatDate(dateStr)} ${date.toTimeString().slice(0, 5)}`;
+  };
+
+  // Process images in markdown content and store them in the output zip
+  const processPostImages = async (
+    zip: JSZip,
+    channelId: string,
+    postId: string,
+    postContent: string,
+    outputZip: JSZip,
+    isAllMd: boolean = false
+  ) => {
+    const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+    let updatedContent = postContent;
+    const promises: Promise<void>[] = [];
+
+    // Create images folder if it doesn't exist
+    const imagesFolder = outputZip.folder('images');
+    if (!imagesFolder) return postContent;
+
+    const matches = Array.from(postContent.matchAll(imageRegex));
+    for (const match of matches) {
+      const [fullMatch, altText, imagePath] = match;
+      const imageFileName = imagePath.split('/').pop();
+      if (!imageFileName) continue;
+
+      // Support common image extensions
+      const imageExtRegex = /\.(jpe?g|png|gif|webp)$/i;
+      if (!imageExtRegex.test(imageFileName)) continue;
+
+      // Look for image in various possible locations in the ZIP
+      const possiblePaths = [
+        `channels/${channelId}/posts/${postId}/${imageFileName}`,
+        `channels/${channelId}/posts/${postId}/images/${imageFileName}`,
+        `channels/${channelId}/images/${imageFileName}`,
+        `images/${imageFileName}`
+      ];
+
+      const imageFile = possiblePaths.reduce((found, path) => found || zip.file(path), null as JSZip.JSZipObject | null);
+
+      if (imageFile) {
+        promises.push(
+          imageFile.async('uint8array').then((content) => {
+            // Store image in the output ZIP
+            imagesFolder.file(imageFileName, content);
+            // Update the markdown to reference the new image location
+            // For all.md we use a root-relative path, for individual files we use relative path
+            const newImagePath = isAllMd ? `/images/${imageFileName}` : `../images/${imageFileName}`;
+            updatedContent = updatedContent.replace(
+              fullMatch,
+              `![${altText}](${newImagePath})`
+            );
+          })
+        );
+      }
+    }
+
+    await Promise.all(promises);
+    return updatedContent;
+  };
+
+  // Replace user mentions with display names
+  const replaceUserMentions = (text: string, userMap: Map<string, string>) => {
+    return text.replace(/<@([^>]+)>/g, (match, userId) => {
+      return `@${userMap.get(userId) || match}`;
+    });
+  };
+
+  // Generate markdown for a single post
+  const generatePostMarkdown = (post: Post, userMap: Map<string, string>) => {
+    let md = `## ${post.title}${post.resolved_at ? ' [resolved]' : ''}\n`;
+    md += `*by ${post.author.display_name || post.author.username} on ${formatDate(post.created_at)}*\n\n`;
+
+    if (post.resolved_at) {
+      md += `*resolved on: ${formatDate(post.resolved_at)}${post.resolved_comment ? `: ${post.resolved_comment}` : ''}*\n`;
+    }
+
+    md += `\n${replaceUserMentions(post.description, userMap)}\n\n`;
+
+    if (post.comments.length > 0) {
+      md += `### comments\n\n`;
+      post.comments.forEach(comment => {
+        md += `#### ${comment.resolved_at ? '[resolved] ' : ''}${comment.author.display_name || comment.author.username} (${formatDateTime(comment.created_at)}):\n`;
+        md += `${replaceUserMentions(comment.body, userMap)}\n\n`;
+
+        comment.replies.forEach(reply => {
+          md += `- ${reply.author.display_name || reply.author.username} at ${formatDateTime(reply.created_at)}: ${replaceUserMentions(reply.body, userMap)}\n`;
+        });
+        md += '\n';
+      });
+    }
+
+    return md;
+  };
+
+  // Process the ZIP file
+  const processZipFile = async (file: File) => {
+    try {
+      const zip = await JSZip.loadAsync(file);
+      const userMap = new Map<string, string>();
+      const channels = new Map<string, Channel>();
+      const posts = new Map<string, { channelId: string; post: Post }>();
+
+      // First, process users.json to build the user map
+      const usersJson = await zip.file('users.json')?.async('text');
+      if (usersJson) {
+        const users: User[] = JSON.parse(usersJson);
+        users.forEach(user => {
+          userMap.set(user.id, user.display_name || user.username);
+        });
+      }
+
+      // Process channels and posts
+      for (const [path, zipEntry] of Object.entries(zip.files)) {
+        if (zipEntry.dir) continue;
+
+        if (path.match(/channels\/[^\/]+\/channel\.json$/)) {
+          const channelJson = await zipEntry.async('text');
+          const channel: Channel = JSON.parse(channelJson);
+          channels.set(channel.id, channel);
+        } else if (path.match(/channels\/[^\/]+\/posts\/[^\/]+\/post\.json$/)) {
+          const postJson = await zipEntry.async('text');
+          const post: Post = JSON.parse(postJson);
+          const channelId = path.split('/')[1];
+          posts.set(post.id, { channelId, post });
+        }
+      }
+
+      // Generate the output ZIP
+      const outputZip = new JSZip();
+      let allMd = '';
+
+      // Process each channel
+      for (const [channelId, channel] of channels) {
+        allMd += `# ${channel.name}\n\n`;
+        const channelPosts = Array.from(posts.values())
+          .filter(p => p.channelId === channelId)
+          .map(p => p.post);
+
+        for (const post of channelPosts) {
+          let postMd = generatePostMarkdown(post, userMap);
+
+          // Process images in the post content
+          postMd = await processPostImages(zip, channelId, post.id, postMd, outputZip);
+
+          // For all.md, we need to process the content again with isAllMd=true to use root-relative paths
+          let allMdPostContent = await processPostImages(zip, channelId, post.id, postMd, outputZip, true);
+          allMd += allMdPostContent + '\n---\n\n';
+
+          // Create individual post file
+          const sanitizedTitle = post.title.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
+          outputZip.file(
+            `${channel.name}/${sanitizedTitle} (${post.id}).md`,
+            postMd
+          );
+        }
+      }
+
+      // Add all.md to the root
+      outputZip.file('all.md', allMd);
+
+      // Generate and download the ZIP
+      const blob = await outputZip.generateAsync({ type: 'blob' });
+      const originalName = file.name.replace(/\.zip$/, '');
+      saveAs(blob, `decamped-${originalName}.zip`);
+
+      if (statusDiv) {
+        statusDiv.textContent = 'Conversion completed! Downloading ZIP file...';
+        statusDiv.className = 'status success';
+        statusDiv.style.display = 'block';
+      }
+    } catch (error) {
+      console.error('Error processing ZIP:', error);
+      if (statusDiv) {
+        statusDiv.textContent = `Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`;
+        statusDiv.className = 'status error';
+        statusDiv.style.display = 'block';
+      }
+    }
+  };
+
+  // Event Listeners
+  browseBtn?.addEventListener('click', () => {
+    fileInput?.click();
+  });
+
+  // Prevent default drag behaviors on the entire window
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    document.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, false);
+  });
+
+  // Handle drag enter/over on window
+  ['dragenter', 'dragover'].forEach(eventName => {
+    document.addEventListener(eventName, () => {
+      dropZone?.classList.add('drag-over');
+    }, false);
+  });
+
+  // Handle drag leave on window - only if not dragging over the dropZone
+  document.addEventListener('dragleave', (e) => {
+    if (!e.relatedTarget || !(e.relatedTarget as Element).closest('#dropZone')) {
+      dropZone?.classList.remove('drag-over');
+    }
+  }, false);
+
+  // Handle drop anywhere on the window
+  document.addEventListener('drop', (e) => {
+    dropZone?.classList.remove('drag-over');
+    const files = e.dataTransfer?.files;
+    if (files && files[0]) {
+      selectedFile = files[0];
+      if (convertBtn) convertBtn.disabled = false;
+      if (statusDiv) {
+        statusDiv.textContent = `File selected: ${selectedFile.name}`;
+        statusDiv.className = 'status';
+        statusDiv.style.display = 'block';
+      }
+    }
+  }, false);
+
+  fileInput?.addEventListener('change', () => {
+    if (fileInput.files && fileInput.files[0]) {
+      selectedFile = fileInput.files[0];
+      if (convertBtn) convertBtn.disabled = false;
+      if (statusDiv) {
+        statusDiv.textContent = `File selected: ${selectedFile.name}`;
+        statusDiv.className = 'status';
+        statusDiv.style.display = 'block';
+      }
+    }
+  });
+
+  convertBtn?.addEventListener('click', () => {
+    if (selectedFile) {
+      if (statusDiv) {
+        statusDiv.textContent = 'Processing...';
+        statusDiv.className = 'status';
+        statusDiv.style.display = 'block';
+      }
+      processZipFile(selectedFile);
+    }
+  });
+</script>
