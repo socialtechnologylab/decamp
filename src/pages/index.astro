@@ -383,6 +383,8 @@ import ExampleOutput from '../components/ExampleOutput';
         statusDiv.className = 'status';
         statusDiv.style.display = 'block';
       }
+      // Track file upload event
+      (window as any).umami?.track('file_upload', { method: 'drop' });
     }
   }, false);
 
@@ -395,6 +397,8 @@ import ExampleOutput from '../components/ExampleOutput';
         statusDiv.className = 'status';
         statusDiv.style.display = 'block';
       }
+      // Track file upload event
+      (window as any).umami?.track('file_upload', { method: 'browse' });
     }
   });
 
@@ -405,6 +409,8 @@ import ExampleOutput from '../components/ExampleOutput';
         statusDiv.className = 'status';
         statusDiv.style.display = 'block';
       }
+      // Track conversion event
+      (window as any).umami?.track('convert_download', { filename: selectedFile.name });
       processZipFile(selectedFile);
     }
   });
