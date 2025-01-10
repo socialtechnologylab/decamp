@@ -4,18 +4,33 @@ interface Props {
 }
 
 const { title } = Astro.props;
+const description = "Convert your campsite export to markdown files with decamp - a tiny utility that helps you pack up your campsite data.";
 ---
 
 <!doctype html>
 <html lang="en">
         <head>
                 <meta charset="UTF-8" />
-                <meta name="description" content="Convert your campsite export to markdown files" />
+                <meta name="description" content={description} />
                 <meta name="viewport" content="width=device-width" />
                 <link rel="icon" type="image/png" href="/decamp.png" />
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
                 <meta name="generator" content={Astro.generator} />
                 <title>{title}</title>
+
+                <!-- Open Graph / Facebook -->
+                <meta property="og:type" content="website" />
+                <meta property="og:url" content="https://decamp.socialtechnologylab.com/" />
+                <meta property="og:title" content={title} />
+                <meta property="og:description" content={description} />
+                <meta property="og:image" content="https://decamp.socialtechnologylab.com/decamp-og.png" />
+
+                <!-- Twitter -->
+                <meta property="twitter:card" content="summary_large_image" />
+                <meta property="twitter:url" content="https://decamp.socialtechnologylab.com/" />
+                <meta property="twitter:title" content={title} />
+                <meta property="twitter:description" content={description} />
+                <meta property="twitter:image" content="https://decamp.socialtechnologylab.com/decamp-og.png" />
 
                 <script is:inline async src="https://um.lodder.dev/lodder.js" data-website-id="9984be09-682c-458d-9dcc-5c186dab14e4"></script>
         </head>

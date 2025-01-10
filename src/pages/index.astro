@@ -293,6 +293,7 @@ import ExampleOutput from '../components/ExampleOutput';
       // Process each channel
       for (const [channelId, channel] of channels) {
         allMd += `# ${channel.name}\n\n`;
+        let channelMd = `# ${channel.name}\n\n`;  // Start channel-specific markdown
         const channelPosts = Array.from(posts.values())
           .filter(p => p.channelId === channelId)
           .map(p => p.post);
@@ -303,9 +304,10 @@ import ExampleOutput from '../components/ExampleOutput';
           // Process images in the post content
           postMd = await processPostImages(zip, channelId, post.id, postMd, outputZip);
 
-          // For all.md, we need to process the content again with isAllMd=true to use root-relative paths
+          // For all.md and channel.md, we need to process the content again with isAllMd=true to use root-relative paths
           let allMdPostContent = await processPostImages(zip, channelId, post.id, postMd, outputZip, true);
           allMd += allMdPostContent + '\n---\n\n';
+          channelMd += allMdPostContent + '\n---\n\n';  // Add to channel-specific markdown
 
           // Create individual post file
           const sanitizedTitle = post.title.replace(/[^a-z0-9]+/gi, '_').toLowerCase();
@@ -314,6 +316,9 @@ import ExampleOutput from '../components/ExampleOutput';
             postMd
           );
         }
+
+        // Add channel.md to the channel's folder
+        outputZip.file(`${channel.name}/${channel.name}.md`, channelMd);
       }
 
       // Add all.md to the root
